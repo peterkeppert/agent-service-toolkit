@@ -211,6 +211,9 @@ async def draw_messages(
             st.write(msg)
             st.stop()
         match msg.type:
+            case "tool":
+                continue
+
             # A message from the user, the easiest case
             case "human":
                 last_message_type = "human"
@@ -219,6 +222,9 @@ async def draw_messages(
             # A message from the agent is the most complex case, since we need to
             # handle streaming tokens and tool calls.
             case "ai":
+                if msg.tool_calls:
+                    continue
+
                 # If we're rendering new messages, store the message in session state
                 if is_new:
                     st.session_state.messages.append(msg)
@@ -238,37 +244,6 @@ async def draw_messages(
                             streaming_placeholder = None
                         else:
                             st.write(msg.content)
-
-                    if msg.tool_calls:
-                        # Create a status container for each tool call and store the
-                        # status container by ID to ensure results are mapped to the
-                        # correct status container.
-                        call_results = {}
-                        for tool_call in msg.tool_calls:
-                            status = st.status(
-                                f"""Tool Call: {tool_call["name"]}""",
-                                state="running" if is_new else "complete",
-                            )
-                            call_results[tool_call["id"]] = status
-                            status.write("Input:")
-                            status.write(tool_call["args"])
-
-                        # Expect one ToolMessage for each tool call.
-                        for _ in range(len(call_results)):
-                            tool_result: ChatMessage = await anext(messages_agen)
-                            if tool_result.type != "tool":
-                                st.error(f"Unexpected ChatMessage type: {tool_result.type}")
-                                st.write(tool_result)
-                                st.stop()
-
-                            # Record the message if it's new, and update the correct
-                            # status container with the result
-                            if is_new:
-                                st.session_state.messages.append(tool_result)
-                            status = call_results[tool_result.tool_call_id]
-                            status.write("Output:")
-                            status.write(tool_result.content)
-                            status.update(state="complete")
 
             case "custom":
                 # CustomData example used by the bg-task-agent
